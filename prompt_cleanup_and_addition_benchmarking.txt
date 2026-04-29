@@ -1,0 +1,10 @@
+can you make a git repo here, it will be nested within the larger git repo and then push it  
+   to github, then clean it up so that things are more organized in to scripts, output images,  
+   output rds files, then we will compare the new realized variance partitioning method on the  
+   1000 hvg for 4 df and see if it differs. Lastly we will try an approach of treating age as a 
+   random effect where you bin the ages in months into equally sized bins of 6 based on their   
+   rankings so that we can compare the variance explained by age and subject when we do this,   
+   use ns or lspline with df=4, or treat age as a fixed or random effect with the age in years  
+   as a categorical variable. Use bobyka for optimization. Make a plan to do this and save it   
+   in the root directory as a md file. Ask clarifying questions and I will review. You don't    
+   need to include the git part in the plan, just do that 
