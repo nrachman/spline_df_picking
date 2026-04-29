@@ -38,6 +38,15 @@ Compare the spline approach to a simpler categorical approach.
 
 ## Clarifying Questions for the User
 1. **Binning Logic:** For the "equally sized bins of 6 based on their rankings," did you mean 6 bins total (e.g., ~115 samples per bin) or bins that contain 6 samples each (e.g., ~115 bins total)?
+Response: 115 bins total, with each bin containing 6 samples (approximately because some samples might be dropped due to incomplete data)
+
 2. **Age Categorical Floor:** For Age in Years as categorical, is `floor(Age.months / 12)` the correct grouping, or should I use a different interval?
+Response: can you use `round(Age.months / 12)` instead but use the correct number of digits for the rounding
+
 3. **Spline DF for Comparison:** For the categorical comparison, is $df=4$ the correct spline baseline, or should we use the "winner" from the AIC tournament?
+
+Response: I like the AIC tournament but I think it suggest that we should just use 1 df for age, but there are some non-linear possibilities that I would like to capture so here I am erring on the side of slightly overfitting the age trend for a few genes to capture the correct one for others
+
 4. **GitHub Remote:** Please provide the URL for the GitHub repository so I can push the organized codebase.
+
+Response: https://github.com/nrachman/spline_df_picking
