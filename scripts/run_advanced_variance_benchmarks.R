@@ -7,19 +7,17 @@ library(edgeR)
 library(BiocParallel)
 library(matrixStats)
 
-# Set working directory to project root relative to this script
-setwd("../../")
-
 # Parallel processing
 register(SerialParam())
 
 # 1. Load Data ------------------------------------------------------------
 cat("Loading data...\n")
-dge <- readRDS("data/processed/limma_dgelist/dgelist.rds")
+# Data is two levels up from the project root
+dge <- readRDS("../../data/processed/limma_dgelist/dgelist.rds")
 dge <- dge[, dge$samples$Sample.type == "case" & !is.na(dge$samples$RIN)]
 
 cat("Loading CBC data...\n")
-cbc <- read_tsv("data/inputs/cbc/cbc_cleaned.tsv", show_col_types = FALSE)
+cbc <- read_tsv("../../data/inputs/cbc/cbc_cleaned.tsv", show_col_types = FALSE)
 cbc <- cbc %>% mutate(Sample_ID = gsub("\\.", "_", Sample_ID))
 
 keep_samples <- intersect(dge$samples$Sample.name, cbc$Sample_ID)
@@ -48,6 +46,9 @@ keep_final <- complete.cases(meta[, cols_to_check])
 meta <- meta[keep_final, ]
 dge <- dge[, keep_final]
 
+# Final sync check
+stopifnot(identical(colnames(dge), rownames(meta)))
+
 # Scale continuous covariates (except Age.months which we might bin or use in splines)
 cat("Scaling continuous covariates...\n")
 continuous_vars <- c("RIN", "mk_dup.PERCENT_DUPLICATION", "star.uniquely_mapped_percent", 
@@ -73,6 +74,9 @@ cpm_data <- cpm(dge, log = TRUE)
 rv <- rowVars(cpm_data)
 hvg_genes <- names(sort(rv, decreasing = TRUE)[1:1000])
 dge_hvg <- dge[hvg_genes, ]
+
+# Ensure sample names match perfectly for variancePartition
+colnames(dge_hvg) <- rownames(meta)
 
 # 4. Helper Function: Realized Predictions Variance Partitioning ---------
 calc_realized_vp <- function(model, age_term_names) {
@@ -161,7 +165,12 @@ models_to_test <- list(
   )
 )
 
-ctrl <- lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000))
+# Suppress singular fit messages and other convergence warnings in the logs
+ctrl <- lmerControl(optimizer = "bobyqa", 
+                    optCtrl = list(maxfun = 100000),
+                    check.conv.singular = .makeCC(action = "ignore", tol = 1e-4),
+                    check.conv.grad = .makeCC(action = "ignore", tol = 1e-3),
+                    check.conv.hess = .makeCC(action = "ignore", tol = 1e-3))
 
 advanced_results <- list()
 
@@ -171,11 +180,15 @@ for (mod_name in names(models_to_test)) {
   form <- as.formula(spec$formula)
   
   # voomWithDreamWeights
-  vobj <- voomWithDreamWeights(dge_hvg$counts, form, meta, BPPARAM=SerialParam(), control=ctrl)
+  vobj <- suppressMessages(suppressWarnings(
+    voomWithDreamWeights(dge_hvg$counts, form, meta, BPPARAM=SerialParam(), control=ctrl)
+  ))
   
   # A. Standard Variance Partitioning
   cat("  Calculating Standard Variance Partitioning...\n")
-  vp_std <- fitExtractVarPartModel(vobj, form, meta, BPPARAM=SerialParam(), control=ctrl)
+  vp_std <- suppressMessages(suppressWarnings(
+    fitExtractVarPartModel(vobj, form, meta, BPPARAM=SerialParam(), control=ctrl)
+  ))
   
   # B. Realized Predictions Variance Partitioning
   cat("  Calculating Realized Predictions Variance Partitioning...\n")
@@ -183,8 +196,10 @@ for (mod_name in names(models_to_test)) {
   realized_vp_list <- lapply(1:nrow(expr_mat), function(i) {
     if (i %% 100 == 0) cat(sprintf("    Gene %d/1000...\n", i))
     tryCatch({
-      m <- lmer(as.formula(paste("expr_mat[i, ]", spec$formula)), data = meta, REML = FALSE, control = ctrl)
-      calc_realized_vp(m, spec$age_terms)
+      m <- suppressMessages(suppressWarnings(
+        lmer(as.formula(paste("expr_mat[i, ]", spec$formula)), data = meta, REML = FALSE, control = ctrl)
+      ))
+      calc_realized_vp(m, spec$age_terms) 
     }, error = function(e) return(NULL))
   })
   
@@ -197,7 +212,9 @@ for (mod_name in names(models_to_test)) {
   cat("  Calculating AIC/BIC...\n")
   metrics_list <- lapply(1:nrow(expr_mat), function(i) {
     tryCatch({
-      m <- lmer(as.formula(paste("expr_mat[i, ]", spec$formula)), data = meta, REML = FALSE, control = ctrl)
+      m <- suppressMessages(suppressWarnings(
+        lmer(as.formula(paste("expr_mat[i, ]", spec$formula)), data = meta, REML = FALSE, control = ctrl)
+      ))
       c(AIC = AIC(m), BIC = BIC(m))
     }, error = function(e) return(c(AIC = NA, BIC = NA)))
   })
