@@ -78,29 +78,59 @@ dge_hvg <- dge[hvg_genes, ]
 # Ensure sample names match perfectly for variancePartition
 colnames(dge_hvg) <- rownames(meta)
 
-# 4. Helper Function: Realized Predictions Variance Partitioning ---------
+# 4. Helper Function: Variance Partitioning ------------------------------
+
+# A. Standard Approach (Population Parameters sigma^2 for Random Effects)
+calc_standard_vp_manual <- function(model, age_term_names) {
+  # 1. Random Effects variances (Theoretical Population Parameters)
+  re_vars_df <- as.data.frame(VarCorr(model))
+  re_vars <- setNames(re_vars_df$vcov, re_vars_df$grp)
+  
+  # 2. Residual variance
+  var_resid <- sigma(model)^2
+  
+  # 3. Fixed Effects variances (Empirical variance of the linear predictor)
+  X <- getME(model, "X")
+  beta <- fixef(model)
+  
+  # Identify Age columns
+  age_cols <- which(colnames(X) %in% age_term_names)
+  
+  # Calculate Age variance
+  if (length(age_cols) > 0) {
+    pred_age <- as.numeric(X[, age_cols, drop=FALSE] %*% beta[age_cols])
+    var_age <- var(pred_age)
+  } else {
+    var_age <- 0
+  }
+  
+  # If Age is a random effect, it's already in re_vars
+  # We want a single "Age" bucket for comparison
+  for (age_re in c("Age_Binned", "Age_Years_Cat")) {
+    if (age_re %in% names(re_vars)) {
+      var_age <- var_age + re_vars[[age_re]]
+      re_vars <- re_vars[names(re_vars) != age_re]
+    }
+  }
+  
+  # Sum everything
+  # Note: re_vars includes "Residual" which we already have in var_resid
+  re_vars_clean <- re_vars[names(re_vars) != "Residual"]
+  
+  vars <- c(Age = var_age, re_vars_clean, Residuals = var_resid)
+  total <- sum(vars)
+  return(vars / total)
+}
+
+# B. Realized Approach (Empirical variance of BLUPs for Random Effects)
 calc_realized_vp <- function(model, age_term_names) {
-  # Get design matrices
   X <- getME(model, "X")
   beta <- fixef(model)
   Z <- getME(model, "Z")
   u <- getME(model, "b")
   
-  # 1. Total Age Effect (Combined spline columns)
+  # 1. Age Prediction (Fixed + Random components if applicable)
   age_cols <- which(colnames(X) %in% age_term_names)
-  if (length(age_cols) == 0) {
-     # Check random effects if Age was modeled as random
-     age_cols <- character(0)
-  }
-  
-  # We'll do this more generally: 
-  # Variance of each component's realized prediction
-  
-  # Fixed Effects Components
-  # Group fixed effects if they belong to the same concept (like Spline)
-  # For this benchmark, we'll focus on Age, Subject, and "Other Fixed"
-  
-  # Age Prediction
   if (length(age_cols) > 0) {
     pred_age <- as.numeric(X[, age_cols, drop=FALSE] %*% beta[age_cols])
   } else {
@@ -119,7 +149,6 @@ calc_realized_vp <- function(model, age_term_names) {
     u_sub <- u[start:end]
     pred_re <- as.numeric(Z_sub %*% u_sub)
     
-    # If Age is a random effect (Age_Binned or Age_Years_Cat)
     if (re_names[i] %in% c("Age_Binned", "Age_Years_Cat")) {
       pred_age <- pred_age + pred_re
     } else {
@@ -184,46 +213,47 @@ for (mod_name in names(models_to_test)) {
     voomWithDreamWeights(dge_hvg$counts, form, meta, BPPARAM=SerialParam(), control=ctrl)
   ))
   
-  # A. Standard Variance Partitioning
-  cat("  Calculating Standard Variance Partitioning...\n")
-  vp_std <- suppressMessages(suppressWarnings(
-    fitExtractVarPartModel(vobj, form, meta, BPPARAM=SerialParam(), control=ctrl)
-  ))
-  
-  # B. Realized Predictions Variance Partitioning
-  cat("  Calculating Realized Predictions Variance Partitioning...\n")
+  # Modeling and Variance Partitioning
   expr_mat <- vobj$E
-  realized_vp_list <- lapply(1:nrow(expr_mat), function(i) {
+  std_vp_list <- list()
+  realized_vp_list <- list()
+  metrics_list <- list()
+  
+  cat("  Fitting models and calculating variance partitioning...\n")
+  for (i in 1:nrow(expr_mat)) {
     if (i %% 100 == 0) cat(sprintf("    Gene %d/1000...\n", i))
+    
     tryCatch({
       m <- suppressMessages(suppressWarnings(
         lmer(as.formula(paste("expr_mat[i, ]", spec$formula)), data = meta, REML = FALSE, control = ctrl)
       ))
-      calc_realized_vp(m, spec$age_terms) 
-    }, error = function(e) return(NULL))
-  })
+      
+      std_vp_list[[i]] <- calc_standard_vp_manual(m, spec$age_terms)
+      realized_vp_list[[i]] <- calc_realized_vp(m, spec$age_terms)
+      metrics_list[[i]] <- c(AIC = AIC(m), BIC = BIC(m))
+      
+    }, error = function(e) {
+      std_vp_list[[i]] <<- NULL
+      realized_vp_list[[i]] <<- NULL
+      metrics_list[[i]] <<- c(AIC = NA, BIC = NA)
+    })
+  }
   
-  # Filter out nulls and combine
-  valid_indices <- which(!sapply(realized_vp_list, is.null))
-  realized_vp_df <- do.call(rbind, realized_vp_list[valid_indices])
-  rownames(realized_vp_df) <- rownames(expr_mat)[valid_indices]
+  # Clean up and combine
+  valid_indices <- which(!sapply(std_vp_list, is.null))
   
-  # C. AIC/BIC
-  cat("  Calculating AIC/BIC...\n")
-  metrics_list <- lapply(1:nrow(expr_mat), function(i) {
-    tryCatch({
-      m <- suppressMessages(suppressWarnings(
-        lmer(as.formula(paste("expr_mat[i, ]", spec$formula)), data = meta, REML = FALSE, control = ctrl)
-      ))
-      c(AIC = AIC(m), BIC = BIC(m))
-    }, error = function(e) return(c(AIC = NA, BIC = NA)))
-  })
+  vp_std_df <- do.call(rbind, std_vp_list[valid_indices])
+  rownames(vp_std_df) <- rownames(expr_mat)[valid_indices]
+  
+  vp_realized_df <- do.call(rbind, realized_vp_list[valid_indices])
+  rownames(vp_realized_df) <- rownames(expr_mat)[valid_indices]
+  
   metrics_df <- do.call(rbind, metrics_list)
   rownames(metrics_df) <- rownames(expr_mat)
   
   advanced_results[[mod_name]] <- list(
-    vp_std = vp_std,
-    vp_realized = realized_vp_df,
+    vp_std = vp_std_df,
+    vp_realized = vp_realized_df,
     metrics = metrics_df
   )
   
