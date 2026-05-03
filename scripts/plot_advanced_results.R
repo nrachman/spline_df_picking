@@ -47,6 +47,23 @@ if ("age_random_binned" %in% names(results)) {
   ggsave("output/images/subject_vs_binned_age_variance.png", p2, width = 8, height = 6)
 }
 
+# 2b. Compare Subject vs. Categorical Age Variance ---------------------------
+if ("age_random_cat" %in% names(results)) {
+  res <- results[["age_random_cat"]]
+  vp <- as.data.frame(res$vp_realized) %>%
+    rownames_to_column("gene") %>%
+    select(gene, Subject.ID, Age, OtherFixed) %>%
+    pivot_longer(-gene, names_to = "Component", values_to = "Variance")
+  
+  p2b <- ggplot(vp, aes(x = Component, y = Variance, fill = Component)) +
+    geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
+    theme_minimal() +
+    labs(title = "Subject vs. Categorical Age Variance",
+         subtitle = "Age modeled as factor(round(Age.months/12))",
+         y = "Variance Explained (%)")
+  ggsave("output/images/subject_vs_cat_age_variance.png", p2b, width = 8, height = 6)
+}
+
 # 3. Model Architecture Comparison (AIC) -----------------------------------
 all_metrics <- list()
 for (name in names(results)) {

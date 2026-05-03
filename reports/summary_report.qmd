@@ -68,7 +68,11 @@ To provide a "ceiling" for how much variance Age could possibly explain, we trea
 ![**Age Variance by Model:** Even when using the highly flexible "Binned" approach—which effectively allows the model to fit a different value every few months of age—the median variance captured by Age remains low (< 10%). This confirms that Age is a secondary driver of variation compared to individuality.](../output/images/age_variance_by_model.png)
 :::
 
-![**Subject vs. Binned Age:** This is the ultimate "stress test." Even when we give the Age model maximum flexibility (the x-axis "Age" box), it still fails to explain as much variance as the Subject ID component. This is definitive proof that the unique "fingerprint" of an individual's immune system is stronger than the signal of chronological development in this age range.](../output/images/subject_vs_binned_age_variance.png){width=70%}
+::: {layout-ncol=2}
+![**Subject vs. Categorical Age:** Even when Age is treated as a simple categorical factor (rounded to the nearest year), the variation between individuals (Subject) far outweighs the variation between age groups.](../output/images/subject_vs_cat_age_variance.png)
+
+![**Subject vs. Binned Age:** Even when we give the Age model maximum flexibility (~115 bins), it still fails to explain as much variance as the Subject ID component. This is definitive proof that the unique "fingerprint" of an individual's immune system is stronger than the signal of chronological development.](../output/images/subject_vs_binned_age_variance.png)
+:::
 
 ---
 
@@ -87,6 +91,34 @@ To visualize how different models capture developmental transitions, we plotted 
 :::
 
 ![**HTRA1:** Demonstrates a clear downward trajectory with age. Note how the spline and linear models overlap heavily, while the categorical model highlights the year-to-year shifts.](../output/images/gene_examples/age_trend_HTRA1.png){width=75%}
+
+---
+
+## Model Divergence: ns vs lspline
+
+Beyond visual smoothness, the choice between Natural Splines (`ns`) and Piecewise Linear Splines (`lspline`) can significantly impact statistical significance (p-values) for specific genes. Below are 10 examples where the two models diverged most sharply in their assessment of the Age effect.
+
+::: {layout-ncol=2}
+![**HBG2:** Shows extreme divergence. Natural splines often provide more conservative p-values by penalizing the global smoothness, whereas piecewise models can be sensitive to local clusters of points.](../output/images/model_differences/diff_HBG2.png)
+
+![**IGF2BP3:** A gene with high early-life expression. The two models agree on the trend but differ by orders of magnitude in significance due to their different basis functions.](../output/images/model_differences/diff_IGF2BP3.png)
+
+![**MID2:** Another example where the piecewise linear model (lspline) assigns a much more aggressive p-value to the trend than the natural spline.](../output/images/model_differences/diff_MID2.png)
+
+![**CFH:** Demonstrates how the global constraint of the natural spline can lead to a more "skeptical" (higher) p-value compared to the local flexibility of lspline.](../output/images/model_differences/diff_CFH.png)
+
+![**IGFBP3:** Consistent downward trend where both models are highly significant, yet the magnitude of significance differs by several logs.](../output/images/model_differences/diff_IGFBP3.png)
+
+![**CD177:** Complex dynamics where the choice of spline architecture changes the statistical weight assigned to the developmental signal.](../output/images/model_differences/diff_CD177.png)
+
+![**NAP1L2:** Shows how the "elbows" in the piecewise linear model (lspline) can sometimes fit local noise differently than the smooth curves of `ns`.](../output/images/model_differences/diff_NAP1L2.png)
+
+![**TMTC1:** A relatively linear trend where the two architectures still yield different p-values, highlighting the sensitivity of inference to model choice.](../output/images/model_differences/diff_TMTC1.png)
+
+![**MPP2:** Example of how the model architecture choice ripples through the entire inference pipeline.](../output/images/model_differences/diff_MPP2.png)
+:::
+
+![**NEFL:** Final example of divergence, showing that even for strong trends, the "mathematical flavor" of the spline matters for final p-value reporting.](../output/images/model_differences/diff_NEFL.png){width=75%}
 
 ---
 
