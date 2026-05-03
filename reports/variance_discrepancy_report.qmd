@@ -1,0 +1,72 @@
+---
+title: "Variance Partitioning Discrepancy Analysis"
+subtitle: "Explaining the Shift in Cell-Frequency Variance across Gene Sets"
+author: "Nicholas Rachmaninoff"
+date: "2026-05-03"
+format: 
+  html:
+    toc: true
+    theme: cosmo
+    embed-resources: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Overview
+
+This report investigates why recent benchmarking results showed significantly lower variance explained by cell-type frequencies compared to previous studies in this project. Through a systematic "Methodological Tournament," we have identified that the discrepancy is not an error, but a biological consequence of **gene selection bias**.
+
+---
+
+## Key Finding: HVGs vs. The Broader Transcriptome
+
+The primary driver of the discrepancy is the subset of genes analyzed. 
+
+1.  **Highly Variable Genes (HVGs):** By definition, these genes show high variation across the dataset. In a longitudinal cohort with multiple samples per subject, this variation is overwhelmingly dominated by **Subject Identity** (individuality).
+2.  **Random Genes:** When we look at genes that are NOT selected for high variability, the "Subject" signal is much weaker, allowing the signal of **Cellular Composition** to emerge as a major driver of variation.
+
+![**Discrepancy Analysis:** This plot compares the variance components for the top 250 HVGs versus 250 random genes. In HVGs, Subject Identity explains ~55% of variance, "crowding out" the CellFreq signal (~5%). In random genes, Subject Identity drops to ~10%, and the CellFreq signal quadruples to ~20%.](../output/images/discrepancy_hvg_vs_rand.png)
+
+---
+
+## Biological Implications
+
+The shift in variance partitioning confirms a fundamental biological truth in this cohort: **Highly individual genes are less sensitive to cell-type composition.**
+
+Genes like *CD177* or sex-linked genes (*XIST*, *RPS4Y1*) maintain their expression levels or trajectories regardless of minor shifts in the percentage of Lymphocytes or Monocytes. Conversely, the broader transcriptome—the thousands of genes that perform standard cellular functions—is much more sensitive to the relative abundance of different immune cell types.
+
+![**Cell Frequency Focus:** The median variance explained by cell frequencies is significantly higher when analyzing the broader transcriptome.](../output/images/discrepancy_cellfreq_focus.png){width=70%}
+
+---
+
+## Methodological Summary
+
+The table below summarizes the mean variance partitioning for the two gene sets (using the full 22-type deconvolution model):
+
+| Component | Top 250 HVGs | Random 250 Genes |
+| :--- | :---: | :---: |
+| **Subject Identity** | ~54.0% | ~10.3% |
+| **Cell Frequencies** | ~4.9% | ~20.7% |
+| **Age (Linear)** | ~0.5% | ~0.5% |
+| **Residuals** | ~21.6% | ~60.9% |
+
+---
+
+## Technical Audit & Reproducibility
+
+The conclusions in this report were drawn by auditing the following scripts:
+
+1.  **Original Script:** `../../scripts/variancePartition/run_varpart/run_varpart_include_cbc_fardeep_lm22.R`
+    -   *Method:* `voom` + `fitExtractVarPartModel` on **all genes**.
+    -   *Result:* High CellFreq variance (~20%) because it averages across the entire transcriptome.
+2.  **Benchmark Script:** `scripts/run_deconvolution_benchmark.R`
+    -   *Method:* `lmer` (manual aggregation) on **1000 HVGs**.
+    -   *Result:* Lower CellFreq variance (~7%) because HVGs are biased toward individual-specific signals.
+3.  **Audit Script:** `scripts/run_discrepancy_analysis.R`
+    -   *Method:* Direct head-to-head comparison of HVGs vs. Random genes using identical model formulas.
+    -   *Result:* Confirmed the gene-set bias as the primary cause of the discrepancy.
+
+### Recommendation
+For the purpose of optimizing **Age Trajectories**, we should continue to focus on HVGs, as they capture the most robust and individual-specific biological signals. However, when reporting global transcriptome composition, we should acknowledge that cell frequencies explain a much larger proportion of variance in non-HVGs.
