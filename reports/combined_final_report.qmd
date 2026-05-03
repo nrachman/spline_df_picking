@@ -1,0 +1,243 @@
+---
+title: "Longitudinal Age Modeling & Variance Partitioning Benchmark"
+subtitle: "Comprehensive Evaluation of Spline Complexity, Empirical Variance, and Gene Selection Bias"
+author: "Nicholas Rachmaninoff"
+date: "2026-05-03"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    embed-resources: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Executive Summary
+
+This report synthesizes the results of extensive benchmarking to optimize the modeling of age trajectories (ages 0–14) in longitudinal immune profiles. Our primary objective is to robustly separate individual identity (**Subject**) from developmental trends (**Age**). Through a series of "Modeling Tournaments" and advanced variance partitioning techniques, we demonstrate that inter-individual variation (individuality) is the dominant driver of transcriptional diversity, remaining remarkably stable regardless of the mathematical complexity used to model developmental age. 
+
+Additionally, we investigate and explain discrepancies in cell-frequency variance partitioning between our benchmarks and previous studies, revealing a fundamental biological consequence of gene selection bias (HVG vs. broader transcriptome) and model formulation.
+
+### Major Conclusions
+
+*   **Dominance of Individuality:** Subject Identity is the single largest driver of variation. Importantly, this individuality signal is intrinsic and remains stable regardless of how aggressively we model Age trajectories ([see Subject Variance Stability](#analysis-1-spline-architecture-complexity-aic-tournament)).
+*   **Gene Selection Bias:** Focusing on Highly Variable Genes (HVGs) vastly enriches for high VES genes: Subject Identity (~54% variance) and has lower var explained by cell frequencies (~5%). In the broader transcriptome (random genes), individuality drops (~10%), and cell frequency composition emerges as a major driver (~21%). This shows that **high VES genes tend to be those with greatest expression variation in the cohort** ([see Analysis 3](#analysis-3-transcriptome-wide-vs-hvg-bias-discrepancy-reconciliation)).
+*   **High-Resolution Deconvolution:** Upgrading from basic 5-type CBC to 22-type FarDeep deconvolution nearly triples the captured cell-frequency variance, reducing residual noise and proving that much "biological noise" is fine-grained compositional shift. We need to also consider the circularity here in that the cell-frequencies were estimated from the data itself ([see Analysis 4](#analysis-4-cell-frequency-resolution-benchmark)).
+*   **Optimal Age Model:** Based on differential expression sensitivity and inference power stability, **Piecewise Linear Splines with 4 degrees of freedom (`lspline(Age.months, df=4)`)** is recommended as a good option for modeling Age. It powerfully captures local, non-linear developmental milestones without overfitting the data ([see High-Resolution Gene Trajectories](#high-resolution-gene-trajectories) and [Model Divergence](#model-divergence-ns-vs-lspline)). The age sensitivity analysis the highly variable genes shows that it is more sensitive at detecting age trends than the natural spline approach ([see Age Inference Power](#analysis-1-spline-architecture-complexity-aic-tournament)). In the AIC tournament, most genes fit best with a single degree of freedom though 50% would benefit from additional df, so it was determined that 4 degrees of freedom would be a good compromise ([see AIC Tournament](#analysis-1-spline-architecture-complexity-aic-tournament)).
+
+---
+
+## Analysis 1: Spline Architecture & Complexity (AIC Tournament)
+
+We compared Natural Cubic Splines (`ns`) and Piecewise Linear Splines (`lspline`) across 10 levels of complexity to identify the "Goldilocks" zone—where we capture biological development without over-parameterizing the model.
+
+### Statistical Fit & Parsimony
+We use the Akaike Information Criterion (AIC) to rank models. AIC rewards goodness-of-fit but penalizes for every additional parameter, ensuring we select the most parsimonious representation.
+
+::: {layout-ncol=2}
+![**AIC Tournament:** This plot shows the percentage of genes for which a specific complexity was the statistical "winner." While many genes prefer simple $df=1$ (linear) models, a significant "tail" of genes requires $df=3$ or $df=4$ to capture non-linear developmental transitions. This justifies a baseline of $df=4$ to ensure no complex biology is missed.](../output/images/aic_tournament.png)
+
+![**AIC Comparison (ns vs lspline):** We calculated the difference in AIC between Natural Splines and Piecewise Linear Splines. Negative values indicate that Natural Splines (`ns`) provide a superior fit. The "curvy" nature of `ns` is a better biological match for developmental trajectories than the "jagged" segments of piecewise linear models.](../output/images/aic_comparison_ns_vs_lspline.png)
+:::
+
+### Robustness of Subject Identity (Individuality)
+A major risk in longitudinal modeling is "variance stealing"—the concern that a highly complex Age model might erroneously absorb variation that actually belongs to the individual (Subject).
+
+::: {layout-ncol=2}
+![**Subject Variance Stability:** This line plot tracks the median variance explained by Subject ID as we increase Age complexity from $df=1$ to $df=10$. The nearly flat line is a critical validation: it proves that our estimates of individuality are intrinsic and are not being artificially reduced by more complex age modeling.](../output/images/subject_variance_stability.png)
+
+![**Subject Variance Correlation:** This heatmap shows the Pearson correlation of Subject variance estimates between different levels of complexity. The correlation is near 1.0 across the entire matrix, meaning a gene identified as "highly individual" at $df=1$ remains just as individual at $df=10$.](../output/images/subject_variance_correlation.png)
+:::
+
+![**Subject Variance Distribution:** By looking at the full distribution of variance across 1000 genes, we see that while some genes have 0% subject variance, many have upwards of 80%. This spread is consistent across all x-axis complexities, confirming that Subject identity is a massive, independent signal in this cohort.](../output/images/subject_variance_distribution.png)
+
+### Inference Power
+![**Age Inference Power:** We tracked the number of genes passing a significant Age effect threshold (FDR < 0.05). The curve rises sharply and plateaus around $df=4$. This "knee" in the curve suggests that adding more than 4 degrees of freedom provides diminishing returns and likely results in overfitting rather than discovering new biological signals.](../output/images/age_inference_power.png)
+
+---
+
+## Analysis 2: Advanced Variance Partitioning & Binned Age
+
+This phase addressed the scale of Subject vs. Age effects using more conservative and "extreme" modeling architectures to stress-test our conclusions.
+
+### "Realized Predictions" vs. Standard VP
+Standard variance partitioning relies on theoretical population parameters ($\sigma^2$), which can sometimes be inflated by outliers. We implemented the **"Realized Predictions"** approach, which calculates the empirical variance of the Best Linear Unbiased Predictors (BLUPs).
+
+![**VP Method Comparison:** The "Realized" method is more conservative. It reflects the variance that the model *actually* predicted for these specific subjects, rather than a theoretical population average. This provides a more grounded, empirical scale for comparing the magnitude of Subject vs. Age effects, preventing the overestimation that can occur with singular fits.](../output/images/vp_method_comparison.png){width=75%}
+
+### Binned Age and Model Architecture
+To provide a "ceiling" for how much variance Age could possibly explain, we treated Age as a granular categorical random effect (`Age_Binned`) by grouping samples into ~115 bins of 6 samples each.
+
+::: {layout-ncol=2}
+![**Model AIC Comparison:** We compared the AIC of spline-based models to the binned and categorical models. Splines generally provide comparable or superior parsimony, offering a smooth biological interpretation that categorical "bins" lack.](../output/images/model_aic_comparison.png)
+
+![**Age Variance by Model:** Even when using the highly flexible "Binned" approach—which effectively allows the model to fit a different value every few months of age—the median variance captured by Age remains low (< 10%). This confirms that Age is a secondary driver of variation compared to individuality.](../output/images/age_variance_by_model.png)
+:::
+
+::: {layout-ncol=2}
+![**Subject vs. Categorical Age:** Even when Age is treated as a simple categorical factor (rounded to the nearest year), the variation between individuals (Subject) far outweighs the variation between age groups.](../output/images/subject_vs_cat_age_variance.png)
+
+![**Subject vs. Binned Age:** Even when we give the Age model maximum flexibility (~115 bins), it still fails to explain as much variance as the Subject ID component. This is definitive proof that the unique "fingerprint" of an individual's immune system is stronger than the signal of chronological development.](../output/images/subject_vs_binned_age_variance.png)
+:::
+
+---
+
+## High-Resolution Gene Trajectories
+
+To visualize how different models capture developmental transitions, we plotted the age-trajectories for 5 representative genes. The raw expression values are adjusted for sex, technical factors (RIN, Batch), and cell type proportions to isolate the pure Age signal.
+
+::: {layout-ncol=2}
+![**MID2:** Shows a gradual, relatively linear developmental trend where all three models perform similarly.](../output/images/gene_examples/age_trend_MID2.png)
+
+![**CD177:** Displays a more complex, non-linear pattern in early life. Natural splines (`ns_df4`) provide a smooth fit through the density of points.](../output/images/gene_examples/age_trend_CD177.png)
+
+![**NAP1L2:** Illustrates how the categorical model (green) can be "jerky" at year boundaries, while splines provide more biologically plausible continuity.](../output/images/gene_examples/age_trend_NAP1L2.png)
+
+![**SFRP5:** A gene with significant early-life dynamics. The natural spline captures the rapid transition more smoothly than the piecewise linear model.](../output/images/gene_examples/age_trend_SFRP5.png)
+:::
+
+![**HTRA1:** Demonstrates a clear downward trajectory with age. Note how the spline and linear models overlap heavily, while the categorical model highlights the year-to-year shifts.](../output/images/gene_examples/age_trend_HTRA1.png){width=75%}
+
+---
+
+## Model Divergence: ns vs lspline
+
+Beyond visual smoothness, the choice between Natural Splines (`ns`) and Piecewise Linear Splines (`lspline`) can significantly impact statistical significance (p-values) for specific genes. Below are 10 examples where the two models diverged most sharply in their assessment of the Age effect.
+
+::: {layout-ncol=2}
+![**HBG2:** Shows extreme divergence. Natural splines often provide more conservative p-values by penalizing the global smoothness, whereas piecewise models can be sensitive to local clusters of points.](../output/images/model_differences/diff_HBG2.png)
+
+![**IGF2BP3:** A gene with high early-life expression. The two models agree on the trend but differ by orders of magnitude in significance due to their different basis functions.](../output/images/model_differences/diff_IGF2BP3.png)
+
+![**MID2:** Another example where the piecewise linear model (lspline) assigns a much more aggressive p-value to the trend than the natural spline.](../output/images/model_differences/diff_MID2.png)
+
+![**CFH:** Demonstrates how the global constraint of the natural spline can lead to a more "skeptical" (higher) p-value compared to the local flexibility of lspline.](../output/images/model_differences/diff_CFH.png)
+
+![**IGFBP3:** Consistent downward trend where both models are highly significant, yet the magnitude of significance differs by several logs.](../output/images/model_differences/diff_IGFBP3.png)
+
+![**CD177:** Complex dynamics where the choice of spline architecture changes the statistical weight assigned to the developmental signal.](../output/images/model_differences/diff_CD177.png)
+
+![**NAP1L2:** Shows how the "elbows" in the piecewise linear model (lspline) can sometimes fit local noise differently than the smooth curves of `ns`.](../output/images/model_differences/diff_NAP1L2.png)
+
+![**TMTC1:** A relatively linear trend where the two architectures still yield different p-values, highlighting the sensitivity of inference to model choice.](../output/images/model_differences/diff_TMTC1.png)
+
+![**MPP2:** Example of how the model architecture choice ripples through the entire inference pipeline.](../output/images/model_differences/diff_MPP2.png)
+:::
+
+![**NEFL:** Final example of divergence, showing that even for strong trends, the "mathematical flavor" of the spline matters for final p-value reporting.](../output/images/model_differences/diff_NEFL.png){width=75%}
+
+---
+
+## Analysis 3: Transcriptome-wide vs. HVG Bias & Discrepancy Reconciliation
+
+A critical finding of this benchmark is the dramatic shift in variance partitioning results depending on gene selection. Previous studies in this project showed high median variance explained by cell frequencies (~17.5%), whereas our initial benchmarks targeting HVGs showed much lower values (~5-7%).
+
+Through a systematic audit, we found this is not an error, but a consequence of **gene selection bias** combined with model definitions.
+
+### Key Finding: HVGs vs. The Broader Transcriptome
+
+1.  **Highly Variable Genes (HVGs):** By definition, these genes show high variation across the dataset. In a longitudinal cohort, this variation is overwhelmingly dominated by **Subject Identity** (individuality). In HVGs, Subject Identity explains ~54% of variance, vastly "crowding out" the Cell Frequency signal.
+2.  **Random Genes:** When we look at random gene sets representing the broader transcriptome, the "Subject" signal drops dramatically (to ~10%). Consequently, the signal of **Cellular Composition** emerges as a major driver of variation.
+
+![**Discrepancy Analysis:** This plot compares the variance components for the top 250 HVGs versus 250 random genes. In HVGs, Subject Identity explains ~55% of variance, "crowding out" the CellFreq signal (~5%). In random genes, Subject Identity drops to ~10%, and the CellFreq signal quadruples to ~20%.](../output/images/discrepancy_hvg_vs_rand.png)
+
+### Biological Implications
+This shift confirms a fundamental biological truth: **Highly individual genes are less sensitive to cell-type composition.** Genes like *CD177* or sex-linked genes maintain their expression trajectories regardless of minor shifts in bulk cell proportions. Conversely, the broader transcriptome—thousands of standard function genes—is highly sensitive to relative cell-type abundance.
+
+### Reconciling with the Paper Figures
+The original paper plotted the **full transcriptome** (16,599 genes), revealing a huge proportion of variation explained by cell-type frequencies. As shown below, our **Random 250 Genes** correctly mirror the paper's full transcriptome results. However, for the **Top 250 HVGs**, the cell frequency signal is completely minimized by the overwhelming Subject Identity signal.
+
+::: {layout-ncol=3}
+![**Original Paper (Full Transcriptome):** Cell frequencies show massive variance across the 16,599 genes.](../output/images/paper_violin_full_transcriptome.png)
+
+![**Random 250 Genes:** Captures the same broad compositional sensitivity as the full transcriptome.](../output/images/paper_violin_rand.png)
+
+![**Top 250 HVGs:** Subject identity crowds out the cell frequency signal entirely.](../output/images/paper_violin_hvg.png)
+:::
+
+### Methodological Summary
+
+| Component | Top 250 HVGs | Random 250 Genes |
+| :--- | :---: | :---: |
+| **Subject Identity** | ~54.0% | ~10.3% |
+| **Cell Frequencies** | ~4.9% | ~20.7% |
+| **Age (Linear)** | ~0.5% | ~0.5% |
+| **Residuals** | ~21.6% | ~60.9% |
+
+### Final Reconciliation: The 11-Type vs. 18-Type Model
+While the gene selection bias explains the massive drop (from ~17.5% down to ~5%), a smaller gap remained between our new "Deconvolution Benchmark" (~15.7% for random genes) and the original paper (~17.5%). This was due to **Model Definition**:
+- Our benchmark isolated **11 fine-grained types**.
+- The original paper "stacked" both the fine-grained deconvolution and coarse CBC types into a single **18-term formula**.
+
+| Model Definition | Cell Types Included | Median Variance Explained |
+| :--- | :--- | :---: |
+| **Original Paper Model** | 18 Types (Combined) | **~17.6%** |
+| **Deconvolution Benchmark** | 11 Types (Fine-grained only) | **~15.7%** |
+| **CBC Benchmark** | 5 Types (Coarse-grained only) | **~6.8%** |
+
+### A Note on Visual Interpretation of the Original Paper Figure
+When reviewing the original paper's violin plot, it visually appears as though Cell Frequencies have a median variance explained of ~60%. **This is a visual artifact caused by the order of columns in the plotting script.** The script appended `CellFreqs` *after* `Residuals`, making it the right-most violin. The violin with the ~59.3% median is actually **Residuals**. The true `CellFreqs` violin accurately reflects the mathematical median of **17.5%**.
+
+---
+
+## Analysis 4: Cell Frequency Resolution Benchmark
+
+We evaluated the impact of using higher-resolution cell type frequencies on our ability to explain transcriptional variation. We compared a model using 5 basic CBC cell types against a model using 22 high-resolution immune cell types from FarDeep LM22 deconvolution.
+
+::: {layout-ncol=2}
+![**Variance Explained by Cell Frequency:** Moving from 5 basic CBC types to 22 high-resolution deconvolution types nearly triples the median variance explained by the "CellFreq" component (from ~2.4% to ~7.1%). This indicates that much of what is typically considered "biological noise" is actually fine-grained variation in immune cell composition.](../output/images/deconvolution_vs_cbc_cellfreq.png)
+
+![**Reduction in Residuals:** The additional variance captured by deconvolution comes primarily from the "Residual" bucket. By explicitly modeling higher-resolution cell types, we reduce the unexplained noise in the dataset, leading to more robust estimates of Age and Subject effects.](../output/images/deconvolution_vs_cbc_residuals.png)
+:::
+
+![**Global Component Comparison:** This boxplot shows the shift in all variance components when moving to high-resolution deconvolution. While Subject ID remains the dominant driver, the increased resolution of deconvolution provides a much clearer picture of the compositional landscape.](../output/images/deconvolution_vs_cbc_all.png){width=80%}
+
+---
+
+## Global Context
+
+### Global Variance Partitioning
+![**Global Variance Partitioning:** This representative view ($ns, df=4$) ranks every component in our model. Subject Identity is the single largest driver of variation, followed by Residual noise and then Age. Technical factors (Batch, RIN) and cell type proportions explain significantly less variance, confirming that our biological signals are robust to technical and compositional noise.](../output/images/global_variance_partitioning.png){width=80%}
+
+---
+
+## Technical Implementation Notes
+
+### Optimization Strategy
+*   **Optimizer:** We enforced the use of the `bobyqa` optimizer. This is more robust than default solvers for models containing complex spline matrices and multiple random effects, ensuring that every gene's variance components were estimated accurately without premature convergence.
+*   **Scaling:** All continuous variables—including **Age.months**—were mean-centered and scaled to unit variance. This improves the numerical stability of the spline basis calculations and ensures that the "OtherFixed" variance components are on a comparable scale.
+*   **Data Integrity Fix:** We identified and resolved a critical sample-matching bug. In longitudinal data, reordering metadata (e.g., sorting by age) without re-syncing the expression matrix columns can scramble the relationship between samples and subjects. Our updated pipeline ensures perfect synchronization, which was essential for recovering the strong Subject variance signal. (note this note only refers to analysis performed here. There was no data integrity issue in the original paper code)
+
+---
+
+## Technical Audit & Reproducibility
+
+The conclusions in this report are supported by a suite of benchmarking and audit scripts. Each analysis was performed using identical data-syncing logic to ensure consistency.
+
+### 1. Spline & Age Modeling
+- **Analysis:** AIC Tournament, Subject Stability, and Inference Power ($df=1..10$).
+- **Script:** `scripts/run_spline_benchmark.R` (HVGs) and `scripts/run_spline_benchmark_random.R` (Random Genes).
+- **Method:** `lmer` with `bobyqa` optimizer; `ns` and `lspline` basis expansion.
+
+### 2. Advanced Variance & Binned Age
+- **Analysis:** Realized Predictions vs. Standard VP; Binned vs. Spline models.
+- **Script:** `scripts/run_advanced_variance_benchmarks.R`
+- **Method:** Empirical variance of BLUPs (Realized) vs. theoretical parameters.
+
+### 3. Cell Frequency Resolution
+- **Analysis:** CBC (5-type) vs. FarDeep LM22 (22-type) deconvolution resolution.
+- **Script:** `scripts/run_deconvolution_benchmark.R` (HVGs) and `scripts/run_deconvolution_benchmark_random.R` (Random Genes).
+- **Method:** Comparative variance partitioning on 1000 genes.
+
+### 4. Variance Discrepancy Audit
+- **Analysis:** HVG bias vs. Random Gene variance partitioning.
+- **Script:** `scripts/run_discrepancy_analysis.R`
+- **Method:** Head-to-head comparison confirming that gene selection is the primary driver of differing "CellFreq" variance estimates.
+
+### Final Recommendation
+Based on the "knee" in the inference power curve, the stability of the AIC tournament, and our most recent Age sensitivity differential expression (DE) gene analysis, we recommend using **Piecewise Linear Splines with 4 degrees of freedom (`lspline(Age.months, df=4)`)**. 
+
+While natural splines (`ns`) provide aesthetically smoother global constraints, `lspline` more sensitively captures local, age-specific dynamics. The DE analysis demonstrated that `lspline` captures these rapid transitions (e.g., critical early infancy developmental milestones) more robustly, and the $df=4$ choice provides the optimal balance. It offers sufficient flexibility for non-linear developmental stages while remaining parsimonious enough to prevent overfitting the noise, all without sacrificing the ability to isolate the powerful signal of Subject Identity.
