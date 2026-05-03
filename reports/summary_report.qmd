@@ -159,5 +159,31 @@ This confirms that HVGs are "variable" primarily because they differ between ind
 *   **Scaling:** All continuous variables—including **Age.months**—were mean-centered and scaled to unit variance. This improves the numerical stability of the spline basis calculations and ensures that the "OtherFixed" variance components are on a comparable scale.
 *   **Data Integrity Fix:** We identified and resolved a critical sample-matching bug. In longitudinal data, reordering metadata (e.g., sorting by age) without re-syncing the expression matrix columns can scramble the relationship between samples and subjects. Our updated pipeline ensures perfect synchronization, which was essential for recovering the strong Subject variance signal.
 
+---
+
+## Technical Audit & Reproducibility
+
+The conclusions in this report are supported by a suite of benchmarking and audit scripts. Each analysis was performed using identical data-syncing logic to ensure consistency.
+
+### 1. Spline & Age Modeling
+- **Analysis:** AIC Tournament, Subject Stability, and Inference Power ($df=1..10$).
+- **Script:** `scripts/run_spline_benchmark.R`
+- **Method:** `lmer` with `bobyqa` optimizer; `ns` and `lspline` basis expansion.
+
+### 2. Advanced Variance & Binned Age
+- **Analysis:** Realized Predictions vs. Standard VP; Binned vs. Spline models.
+- **Script:** `scripts/run_advanced_variance_benchmarks.R`
+- **Method:** Empirical variance of BLUPs (Realized) vs. theoretical parameters.
+
+### 3. Cell Frequency Resolution
+- **Analysis:** CBC (5-type) vs. FarDeep LM22 (22-type) deconvolution resolution.
+- **Script:** `scripts/run_deconvolution_benchmark.R`
+- **Method:** Comparative variance partitioning on 1000 HVGs.
+
+### 4. Variance Discrepancy Audit
+- **Analysis:** HVG bias vs. Random Gene variance partitioning.
+- **Script:** `scripts/run_discrepancy_analysis.R`
+- **Method:** Head-to-head comparison confirming that gene selection is the primary driver of differing "CellFreq" variance estimates.
+
 ### Final Recommendation
 Based on the "knee" in the inference power curve and the stability of the AIC tournament, we recommend using **Natural Cubic Splines with 4 degrees of freedom (`ns(Age.months, df=4)`)**. This configuration provides the optimal balance: it is flexible enough to capture non-linear developmental milestones (e.g., early infancy transitions) while remaining parsimonious enough to avoid overfitting the noise.
