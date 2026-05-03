@@ -49,12 +49,6 @@ dge <- dge[, keep_final]
 # Final sync check
 stopifnot(identical(colnames(dge), rownames(meta)))
 
-# Scale continuous covariates (except Age.months which we might bin or use in splines)
-cat("Scaling continuous covariates...\n")
-continuous_vars <- c("RIN", "mk_dup.PERCENT_DUPLICATION", "star.uniquely_mapped_percent", 
-                     "Lymph.pcnt", "Mid.pcnt", "Gran.pcnt", "MON.pcnt", "EOS.pcnt")
-for (v in continuous_vars) meta[[v]] <- scale(meta[[v]])[,1]
-
 # 2. Advanced Age Transformations ----------------------------------------
 
 # A. Age Binned (6 samples per bin)
@@ -64,9 +58,19 @@ meta <- meta %>%
   arrange(Age.months) %>%
   mutate(Age_Binned = factor(rep(1:n_bins, each = 6, length.out = n())))
 
+# Re-sync DGE to the new meta order (CRITICAL FIX)
+dge <- dge[, rownames(meta)]
+stopifnot(identical(colnames(dge), rownames(meta)))
+
 # B. Age Years Categorical
 cat("Creating Age Years Categorical...\n")
 meta$Age_Years_Cat <- factor(round(meta$Age.months / 12, 0))
+
+# Scale continuous covariates (including Age.months for splines to match standard benchmark)
+cat("Scaling continuous covariates...\n")
+continuous_vars <- c("RIN", "mk_dup.PERCENT_DUPLICATION", "star.uniquely_mapped_percent", 
+                     "Lymph.pcnt", "Mid.pcnt", "Gran.pcnt", "MON.pcnt", "EOS.pcnt", "Age.months")
+for (v in continuous_vars) meta[[v]] <- scale(meta[[v]])[,1]
 
 # 3. Gene Selection (1000 HVGs) -------------------------------------------
 cat("Selecting 1000 HVGs...\n")
@@ -93,19 +97,32 @@ calc_standard_vp_manual <- function(model, age_term_names) {
   X <- getME(model, "X")
   beta <- fixef(model)
   
-  # Identify Age columns
-  age_cols <- which(colnames(X) %in% age_term_names)
+  # Identify all fixed effects components (intercept excluded)
+  fixed_names <- colnames(X)
+  fixed_names <- fixed_names[fixed_names != "(Intercept)"]
   
-  # Calculate Age variance
+  # Group all non-age fixed effects together
+  other_fixed_names <- setdiff(fixed_names, age_term_names)
+  
+  # Calculate Age variance (Fixed part)
+  age_cols <- which(colnames(X) %in% age_term_names)
   if (length(age_cols) > 0) {
-    pred_age <- as.numeric(X[, age_cols, drop=FALSE] %*% beta[age_cols])
-    var_age <- var(pred_age)
+    pred_age_fixed <- as.numeric(X[, age_cols, drop=FALSE] %*% beta[age_cols])
+    var_age <- var(pred_age_fixed)
   } else {
     var_age <- 0
   }
   
+  # Calculate other Fixed variance
+  other_fixed_cols <- which(colnames(X) %in% other_fixed_names)
+  if (length(other_fixed_cols) > 0) {
+    pred_other_fixed <- as.numeric(X[, other_fixed_cols, drop=FALSE] %*% beta[other_fixed_cols])
+    var_other_fixed <- var(pred_other_fixed)
+  } else {
+    var_other_fixed <- 0
+  }
+  
   # If Age is a random effect, it's already in re_vars
-  # We want a single "Age" bucket for comparison
   for (age_re in c("Age_Binned", "Age_Years_Cat")) {
     if (age_re %in% names(re_vars)) {
       var_age <- var_age + re_vars[[age_re]]
@@ -114,10 +131,9 @@ calc_standard_vp_manual <- function(model, age_term_names) {
   }
   
   # Sum everything
-  # Note: re_vars includes "Residual" which we already have in var_resid
   re_vars_clean <- re_vars[names(re_vars) != "Residual"]
   
-  vars <- c(Age = var_age, re_vars_clean, Residuals = var_resid)
+  vars <- c(Age = var_age, re_vars_clean, OtherFixed = var_other_fixed, Residuals = var_resid)
   total <- sum(vars)
   return(vars / total)
 }
@@ -135,6 +151,17 @@ calc_realized_vp <- function(model, age_term_names) {
     pred_age <- as.numeric(X[, age_cols, drop=FALSE] %*% beta[age_cols])
   } else {
     pred_age <- rep(0, nrow(X))
+  }
+  
+  # 2. Other Fixed Effects
+  fixed_names <- colnames(X)
+  fixed_names <- fixed_names[fixed_names != "(Intercept)"]
+  other_fixed_names <- setdiff(fixed_names, age_term_names)
+  other_fixed_cols <- which(colnames(X) %in% other_fixed_names)
+  if (length(other_fixed_cols) > 0) {
+    pred_other_fixed <- as.numeric(X[, other_fixed_cols, drop=FALSE] %*% beta[other_fixed_cols])
+  } else {
+    pred_other_fixed <- rep(0, nrow(X))
   }
   
   # Random Effects Components
@@ -157,9 +184,10 @@ calc_realized_vp <- function(model, age_term_names) {
   }
   
   var_age <- var(pred_age)
+  var_other_fixed <- var(pred_other_fixed)
   var_resid <- sigma(model)^2
   
-  vars <- c(Age = var_age, unlist(re_vars), Residuals = var_resid)
+  vars <- c(Age = var_age, unlist(re_vars), OtherFixed = var_other_fixed, Residuals = var_resid)
   total <- sum(vars)
   return(vars / total)
 }

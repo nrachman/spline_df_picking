@@ -10,16 +10,16 @@ if ("ns_df4" %in% names(results)) {
   
   std <- as.data.frame(res$vp_std) %>%
     rownames_to_column("gene") %>%
-    select(gene, Subject.ID, Age = starts_with("ns(")) %>%
+    select(gene, Subject.ID, Age, OtherFixed) %>%
     mutate(Method = "Standard")
   
   realized <- as.data.frame(res$vp_realized) %>%
     rownames_to_column("gene") %>%
-    select(gene, Subject.ID = Subject.ID, Age) %>%
+    select(gene, Subject.ID, Age, OtherFixed) %>%
     mutate(Method = "Realized")
   
   comp_df <- bind_rows(std, realized) %>%
-    pivot_longer(cols = c(Subject.ID, Age), names_to = "Component", values_to = "Variance")
+    pivot_longer(cols = c(Subject.ID, Age, OtherFixed), names_to = "Component", values_to = "Variance")
   
   p1 <- ggplot(comp_df, aes(x = Component, y = Variance, fill = Method)) +
     geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
@@ -35,7 +35,7 @@ if ("age_random_binned" %in% names(results)) {
   res <- results[["age_random_binned"]]
   vp <- as.data.frame(res$vp_realized) %>%
     rownames_to_column("gene") %>%
-    select(gene, Subject.ID, Age) %>%
+    select(gene, Subject.ID, Age, OtherFixed) %>%
     pivot_longer(-gene, names_to = "Component", values_to = "Variance")
   
   p2 <- ggplot(vp, aes(x = Component, y = Variance, fill = Component)) +
