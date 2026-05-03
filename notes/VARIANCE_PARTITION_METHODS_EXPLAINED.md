@@ -54,3 +54,37 @@ However, you are dealing with a complex overlapping cohort design (ages 0-14) an
 1. **Spline Aggregation:** When you use `ns(Age, df=3)`, it creates three separate columns in the fixed effects matrix. To find the "Total Variance Explained by Age", you cannot just add their individual variances together (because the spline components covary). You must use the Realized Predictions approach: calculate the combined prediction for the whole spline ($\hat{y}_{age} = X_{ns1}\beta_1 + X_{ns2}\beta_2 + X_{ns3}\beta_3$) and take the variance of that total prediction. *(Note: modern versions of `variancePartition::calcVarPart` actually do this aggregation for fixed-effect splines correctly under the hood!)*
 2. **The Subject vs. Age Debate:** Your reviewers are skeptical about the high variance attributed to `Subject.ID`. They may (rightfully) suspect that the standard $\sigma^2$ approach is mathematically inflating the importance of Subject compared to the fixed Age effect due to the difference between population parameter estimates and the actual "shrunken" BLUPs in the sample.
 3. **The Solution:** By evaluating the **Realized Predictions**, you calculate the variance of the *shrunken, conservative* BLUPs that `Subject.ID` actually contributed to your specific 690 samples. If the Realized Prediction variance for Subject remains massively higher than the Realized Prediction variance for Age (even when using AIC to give Age the most flexible `df` possible), you have an irrefutable, empirical mathematical argument for the reviewers. You are proving the Subject effect is massive even when using the most conservative metric available.
+
+# Variance Partition Discrepancy Analysis
+
+## Overview
+Recent benchmarking of cell-frequency variance (CBC vs. Deconvolution) showed lower variance explained by cell types compared to previous results. Investigation revealed that this is primarily due to **gene selection bias** and the inclusion of **Subject ID** as a random effect.
+
+## Key Findings
+
+### 1. HVGs vs. Random Genes
+When analyzing the top 100 Highly Variable Genes (HVGs), the variance is dominated by Subject Identity (individuality). When looking at 100 Random Genes (representing the broader transcriptome), the variance explained by Cell Frequencies quadruples.
+
+| Gene Set | Subject Var (Mean) | CellFreq Var (Mean) | Residual Var (Mean) |
+| :--- | :--- | :--- | :--- |
+| **Top 100 HVGs** | 54.0% | 4.9% | 21.6% |
+| **Random 100 Genes** | 10.3% | 20.7% | 60.9% |
+
+**Conclusion:** HVGs are genes that are "highly variable" specifically because they vary between individuals. This biological signal "crowds out" the compositional signal from cell frequencies. Random genes have less individuality, making the cell composition signal relatively larger.
+
+### 2. The Role of Subject ID
+Including `Subject.ID` as a random effect captures intrinsic individual differences. If `Subject.ID` is removed from the model for random genes, the CellFreq variance remains stable (~21%), but the Residual variance increases to compensate for the lost Subject signal.
+
+### 3. Realized vs. Computed Variance Explained
+Standard variance partitioning relies on theoretical population parameters ($\sigma^2$), which can be sensitive to singular fits or inflated by outliers in small cohorts.
+- **Computed (Standard):** Uses the estimated variance components directly from the model object (`VarCorr`).
+- **Realized:** Calculates the empirical variance of the Best Linear Unbiased Predictors (BLUPs) for these specific subjects.
+- **Result:** The "Realized" method is more conservative and provides a more grounded, empirical scale for comparing the magnitude of Subject vs. Age effects, preventing the overestimation that can occur with theoretical population averages.
+
+### 4. Spline Complexity
+Using `lspline(n=4)` for Age partitions developmental variation more granularly than a linear Age model. However, this has a smaller impact on CellFreq variance than the choice of gene set.
+
+## Recommendation for Reporting
+- Acknowledge that variance components are relative to the gene set analyzed.
+- For global transcriptome summaries, random gene subsets or all-gene averages are more appropriate for showing cell-frequency impacts.
+- For high-resolution trajectory modeling (the focus of this benchmark), focusing on HVGs is correct as it captures the most robust biological signals (Subject and Age).

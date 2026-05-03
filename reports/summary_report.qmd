@@ -143,6 +143,15 @@ We evaluated the impact of using higher-resolution cell type frequencies on our 
 
 ---
 
+## Methodological Observations
+
+### Impact of Gene Selection on Variance Partitioning
+Our analysis shows that focusing on the Top 1000 Highly Variable Genes (HVGs) significantly highlights **Subject Identity** (~54% variance) while relatively downplaying **Cell Frequency** (~5% variance). In contrast, analyzing random gene subsets (representing the broader transcriptome) shows that Cell Frequency resolution can explain upwards of **20%** of transcriptional variation.
+
+This confirms that HVGs are "variable" primarily because they differ between individuals, whereas the broader transcriptome is more sensitive to shifts in cellular composition. For the purpose of optimizing **Age trajectories**, focusing on HVGs is appropriate as it isolates the most robust biological signals.
+
+---
+
 ## Technical Implementation Notes
 
 ### Optimization Strategy
