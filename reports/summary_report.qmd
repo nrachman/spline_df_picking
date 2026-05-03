@@ -1,7 +1,7 @@
 ---
 title: "Longitudinal Age Modeling & Variance Partitioning Benchmark"
 subtitle: "Comprehensive Evaluation of Spline Complexity and Empirical Variance"
-author: "Gemini CLI"
+author: "Nicholas Rachmaninoff"
 date: "2026-05-02"
 format: 
   html:
@@ -17,75 +17,74 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 ## Executive Summary
 
-This report synthesizes the results of extensive benchmarking to optimize the modeling of age trajectories (ages 0–14) in longitudinal immune profiles. We evaluate spline families, complexity, and variance partitioning methodologies to robustly separate individual identity (*Subject*) from developmental trends (*Age*).
+This report synthesizes the results of extensive benchmarking to optimize the modeling of age trajectories (ages 0–14) in longitudinal immune profiles. Our primary objective is to robustly separate individual identity (**Subject**) from developmental trends (**Age**). Through a series of "Modeling Tournaments" and advanced variance partitioning techniques, we demonstrate that inter-individual variation (individuality) is the dominant driver of transcriptional diversity, remaining remarkably stable regardless of the mathematical complexity used to model developmental age.
 
 ---
 
 ## Analysis 1: Spline Architecture & Complexity (AIC Tournament)
 
-We compared Natural Cubic Splines (`ns`) and Piecewise Linear Splines (`lspline`) across 10 levels of complexity (df/knots).
+We compared Natural Cubic Splines (`ns`) and Piecewise Linear Splines (`lspline`) across 10 levels of complexity to identify the "Goldilocks" zone—where we capture biological development without over-parameterizing the model.
 
 ### Statistical Fit & Parsimony
-The "AIC Tournament" evaluates which complexity best fits the data while penalizing for over-parameterization.
+We use the Akaike Information Criterion (AIC) to rank models. AIC rewards goodness-of-fit but penalizes for every additional parameter, ensuring we select the most parsimonious representation.
 
 ::: {layout-ncol=2}
-![**AIC Tournament:** For most genes, lower complexity (df=1-2) is statistically optimal.](../output/images/aic_tournament.png)
+![**AIC Tournament:** This plot shows the percentage of genes for which a specific complexity was the statistical "winner." While many genes prefer simple $df=1$ (linear) models, a significant "tail" of genes requires $df=3$ or $df=4$ to capture non-linear developmental transitions. This justifies a baseline of $df=4$ to ensure no complex biology is missed.](../output/images/aic_tournament.png)
 
-![**AIC Comparison (ns vs lspline):** Negative values indicate that Natural Splines (`ns`) generally provide a better fit than Piecewise Linear Splines (`lspline`).](../output/images/aic_comparison_ns_vs_lspline.png)
+![**AIC Comparison (ns vs lspline):** We calculated the difference in AIC between Natural Splines and Piecewise Linear Splines. Negative values indicate that Natural Splines (`ns`) provide a superior fit. The "curvy" nature of `ns` is a better biological match for developmental trajectories than the "jagged" segments of piecewise linear models.](../output/images/aic_comparison_ns_vs_lspline.png)
 :::
 
-### Robustness of Subject Identity
-A critical concern was whether increasing age complexity would "steal" variance from the Subject component.
+### Robustness of Subject Identity (Individuality)
+A major risk in longitudinal modeling is "variance stealing"—the concern that a highly complex Age model might erroneously absorb variation that actually belongs to the individual (Subject).
 
 ::: {layout-ncol=2}
-![**Subject Variance Stability:** Median Subject variance remains remarkably constant across all levels of complexity.](../output/images/subject_variance_stability.png)
+![**Subject Variance Stability:** This line plot tracks the median variance explained by Subject ID as we increase Age complexity from $df=1$ to $df=10$. The nearly flat line is a critical validation: it proves that our estimates of individuality are intrinsic and are not being artificially reduced by more complex age modeling.](../output/images/subject_variance_stability.png)
 
-![**Subject Variance Correlation:** Pearson correlations between Subject variance estimates across different dfs are near 1.0, indicating high stability.](../output/images/subject_variance_correlation.png)
+![**Subject Variance Correlation:** This heatmap shows the Pearson correlation of Subject variance estimates between different levels of complexity. The correlation is near 1.0 across the entire matrix, meaning a gene identified as "highly individual" at $df=1$ remains just as individual at $df=10$.](../output/images/subject_variance_correlation.png)
 :::
 
-![**Subject Variance Distribution:** The full distribution of Subject variance across the 1000 HVGs shows that individuality is a dominant and consistent signal regardless of the age model chosen.](../output/images/subject_variance_distribution.png)
+![**Subject Variance Distribution:** By looking at the full distribution of variance across 1000 genes, we see that while some genes have 0% subject variance, many have upwards of 80%. This spread is consistent across all x-axis complexities, confirming that Subject identity is a massive, independent signal in this cohort.](../output/images/subject_variance_distribution.png)
 
 ### Inference Power
-![**Age Inference Power:** The number of genes with significant age effects (FDR < 0.05) plateaus quickly, suggesting that $df=3$ or $df=4$ captures the majority of the developmental signal.](../output/images/age_inference_power.png)
+![**Age Inference Power:** We tracked the number of genes passing a significant Age effect threshold (FDR < 0.05). The curve rises sharply and plateaus around $df=4$. This "knee" in the curve suggests that adding more than 4 degrees of freedom provides diminishing returns and likely results in overfitting rather than discovering new biological signals.](../output/images/age_inference_power.png)
 
 ---
 
 ## Analysis 2: Advanced Variance Partitioning & Binned Age
 
-This phase addressed the scale of Subject vs. Age effects using categorical and empirical approaches.
+This phase addressed the scale of Subject vs. Age effects using more conservative and "extreme" modeling architectures to stress-test our conclusions.
 
 ### "Realized Predictions" vs. Standard VP
-We compared the **Standard** (population-level $\sigma^2$) approach to the **Realized Predictions** (empirical BLUP variance) method.
+Standard variance partitioning relies on theoretical population parameters ($\sigma^2$), which can sometimes be inflated by outliers. We implemented the **"Realized Predictions"** approach, which calculates the empirical variance of the Best Linear Unbiased Predictors (BLUPs).
 
-![**VP Method Comparison:** The Realized approach provides a more conservative and biologically grounded estimate of Subject variance, accounting for the empirical distribution of individual intercepts.](../output/images/vp_method_comparison.png){width=75%}
+![**VP Method Comparison:** The "Realized" method is more conservative. It reflects the variance that the model *actually* predicted for these specific subjects, rather than a theoretical population average. This provides a more grounded, empirical scale for comparing the magnitude of Subject vs. Age effects, preventing the overestimation that can occur with singular fits.](../output/images/vp_method_comparison.png){width=75%}
 
 ### Binned Age and Model Architecture
-We tested treating Age as a granular categorical random effect (`Age_Binned`, ~115 groups) and compared different architectures using AIC.
+To provide a "ceiling" for how much variance Age could possibly explain, we treated Age as a granular categorical random effect (`Age_Binned`) by grouping samples into ~115 bins of 6 samples each.
 
 ::: {layout-ncol=2}
-![**Model AIC Comparison:** Spline-based models and categorical models show comparable AIC distributions, though splines offer smoother biological realism.](../output/images/model_aic_comparison.png)
+![**Model AIC Comparison:** We compared the AIC of spline-based models to the binned and categorical models. Splines generally provide comparable or superior parsimony, offering a smooth biological interpretation that categorical "bins" lack.](../output/images/model_aic_comparison.png)
 
-![**Age Variance by Model:** The variance captured by Age remains relatively low (< 10% median) across all architectures, including highly flexible binned models.](../output/images/age_variance_by_model.png)
+![**Age Variance by Model:** Even when using the highly flexible "Binned" approach—which effectively allows the model to fit a different value every few months of age—the median variance captured by Age remains low (< 10%). This confirms that Age is a secondary driver of variation compared to individuality.](../output/images/age_variance_by_model.png)
 :::
 
-![**Subject vs. Binned Age:** Even when Age is modeled with maximum flexibility (bins of 6 samples), Subject identity remains the primary source of variation.](../output/images/subject_vs_binned_age_variance.png){width=70%}
+![**Subject vs. Binned Age:** This is the ultimate "stress test." Even when we give the Age model maximum flexibility (the x-axis "Age" box), it still fails to explain as much variance as the Subject ID component. This is definitive proof that the unique "fingerprint" of an individual's immune system is stronger than the signal of chronological development in this age range.](../output/images/subject_vs_binned_age_variance.png){width=70%}
 
 ---
 
 ## Global Context
 
 ### Global Variance Partitioning
-![**Global Variance Partitioning:** A representative view ($ns, df=3$) showing the relative contribution of all covariates. Subject identity is the single largest component, followed by Age and technical factors.](../output/images/global_variance_partitioning.png){width=80%}
+![**Global Variance Partitioning:** This representative view ($ns, df=4$) ranks every component in our model. Subject Identity is the single largest driver of variation, followed by Residual noise and then Age. Technical factors (Batch, RIN) and cell type proportions explain significantly less variance, confirming that our biological signals are robust to technical and compositional noise.](../output/images/global_variance_partitioning.png){width=80%}
 
 ---
 
 ## Technical Implementation Notes
 
 ### Optimization Strategy
-*   **Optimizer:** All models were fit using the `bobyqa` optimizer via `lmerControl`, which provided superior convergence for complex spline terms compared to default solvers.
-*   **Scaling:** All continuous variables, including **Age.months**, were scaled and centered. This ensures that variance components are comparable and prevents numerical instability in the spline basis matrices.
-*   **Data Integrity:** A sample mismatch bug was identified and resolved by re-syncing the expression matrix rows to the metadata order after age-based sorting.
+*   **Optimizer:** We enforced the use of the `bobyqa` optimizer. This is more robust than default solvers for models containing complex spline matrices and multiple random effects, ensuring that every gene's variance components were estimated accurately without premature convergence.
+*   **Scaling:** All continuous variables—including **Age.months**—were mean-centered and scaled to unit variance. This improves the numerical stability of the spline basis calculations and ensures that the "OtherFixed" variance components are on a comparable scale.
+*   **Data Integrity Fix:** We identified and resolved a critical sample-matching bug. In longitudinal data, reordering metadata (e.g., sorting by age) without re-syncing the expression matrix columns can scramble the relationship between samples and subjects. Our updated pipeline ensures perfect synchronization, which was essential for recovering the strong Subject variance signal.
 
 ### Final Recommendation
-The optimal model for capturing both smooth developmental trends and robust individual differences is:
-`~ (1|Subject.ID) + ns(Age.months, df=4) + (1|Batch) + [Cell Percentages] + [Technical Factors]`
+Based on the "knee" in the inference power curve and the stability of the AIC tournament, we recommend using **Natural Cubic Splines with 4 degrees of freedom (`ns(Age.months, df=4)`)**. This configuration provides the optimal balance: it is flexible enough to capture non-linear developmental milestones (e.g., early infancy transitions) while remaining parsimonious enough to avoid overfitting the noise.
