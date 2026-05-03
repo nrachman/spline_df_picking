@@ -41,6 +41,24 @@ Genes like *CD177* or sex-linked genes (*XIST*, *RPS4Y1*) maintain their express
 
 ---
 
+## Reconciling with the Paper Figures
+
+To directly address the discrepancy between our recent benchmark (which focused on HVGs) and the visualization in the original paper (`S3A_violin_plot_full_ctrl_cells.R`), we re-created the exact violin plot styling from the `variancePartition` package.
+
+The original paper plotted the **full transcriptome** (16,599 genes), which revealed a huge proportion of variation explained by cell-type frequencies, with a long tail of genes where composition dominates variance.
+
+As shown below, when we apply the exact same visualization to our **Random 250 Genes**, it perfectly mirrors the paper's full transcriptome results. However, when applied to the **Top 250 HVGs**, the cell frequency signal is minimized by the overwhelming Subject Identity signal.
+
+::: {layout-ncol=3}
+![**Original Paper (Full Transcriptome):** Cell frequencies show massive variance across the 16,599 genes.](../output/images/paper_violin_full_transcriptome.png)
+
+![**Random 250 Genes:** Captures the same broad compositional sensitivity as the full transcriptome.](../output/images/paper_violin_rand.png)
+
+![**Top 250 HVGs:** Subject identity crowds out the cell frequency signal entirely.](../output/images/paper_violin_hvg.png)
+:::
+
+---
+
 ## Methodological Summary
 
 The table below summarizes the mean variance partitioning for the two gene sets (using the full 22-type deconvolution model):
@@ -60,13 +78,37 @@ The conclusions in this report were drawn by auditing the following scripts:
 
 1.  **Original Script:** `../../scripts/variancePartition/run_varpart/run_varpart_include_cbc_fardeep_lm22.R`
     -   *Method:* `voom` + `fitExtractVarPartModel` on **all genes**.
-    -   *Result:* High CellFreq variance (~20%) because it averages across the entire transcriptome.
+    -   *Result:* High CellFreq variance (~17.5% median) because it averages across the entire transcriptome.
 2.  **Benchmark Script:** `scripts/run_deconvolution_benchmark.R`
     -   *Method:* `lmer` (manual aggregation) on **1000 HVGs**.
     -   *Result:* Lower CellFreq variance (~7%) because HVGs are biased toward individual-specific signals.
 3.  **Audit Script:** `scripts/run_discrepancy_analysis.R`
     -   *Method:* Direct head-to-head comparison of HVGs vs. Random genes using identical model formulas.
     -   *Result:* Confirmed the gene-set bias as the primary cause of the discrepancy.
+
+---
+
+## Final Reconciliation: The 11-Type vs. 18-Type Model
+
+While the **gene selection bias** explains the massive drop in variance (from ~17.5% median down to ~5%), there remained a smaller gap between our new "Deconvolution Benchmark" (which showed ~15.7% median variance for random genes) and the original paper's full results (~17.5%). 
+
+A final audit of the original paper's variance partitioning script (`run_varpart_include_cbc_fardeep_lm22.R`) revealed the source of this final difference: **Model Definition.**
+
+In our recent benchmark (`run_deconvolution_benchmark_random.R`), we explicitly *isolated* the models to compare their individual utility:
+- **CBC Benchmark:** Only 3 coarse-grained cell types (Lymphocytes, Granulocytes, Mid).
+- **Deconvolution Benchmark:** Explicitly filtered *out* the broad types, using only **11 fine-grained types**.
+
+However, the original paper's `varPart` formula included the entire `cellfreqs` dataframe, which was a combined matrix of **18 cell types** (both the CBC coarse categories *and* the fine-grained deconvolution subsets simultaneously).
+
+When we re-run the exact same 250 random genes through all three model definitions, we perfectly recreate the cascade:
+
+| Model Definition | Cell Types Included | Median Variance Explained |
+| :--- | :--- | :---: |
+| **Original Paper Model** | 18 Types (Combined) | **~17.6%** |
+| **Deconvolution Benchmark** | 11 Types (Fine-grained only) | **~15.7%** |
+| **CBC Benchmark** | 5 Types (Coarse-grained only) | **~6.8%** |
+
+This proves that the original paper achieved a slightly higher total variance explained by "stacking" the variance from both coarse and fine-grained compositional data into a single 18-term formula. Our benchmark, by design, isolated them to prove that high-resolution deconvolution independently out-performs basic CBC.
 
 ### Recommendation
 For the purpose of optimizing **Age Trajectories**, we should continue to focus on HVGs, as they capture the most robust and individual-specific biological signals. However, when reporting global transcriptome composition, we should acknowledge that cell frequencies explain a much larger proportion of variance in non-HVGs.

@@ -1,0 +1,11 @@
+library(tidyverse)
+vp_paper <- readRDS("../../data/analysis_out/variancePartition/varPart_include_cbc_fardeep_lm22_summed.rds")
+vp_paper <- data.frame(vp_paper)
+cell_cols <- startsWith(colnames(vp_paper), "cellfreq")
+vp_paper$Summed_CellFreq <- rowSums(vp_paper[, cell_cols])
+cat("PAPER VP STATS (Total Genes:", nrow(vp_paper), "):\n")
+print(summary(vp_paper$Summed_CellFreq))
+
+vp_discrep <- readRDS("output/rds/vp_discrepancy_data.rds")
+cat("\nDISCREPANCY STATS:\n")
+vp_discrep %>% group_by(GeneSet) %>% summarise(mean_cellfreq = mean(Summed_CellFreq), median_cellfreq = median(Summed_CellFreq), max_cellfreq = max(Summed_CellFreq)) %>% print()

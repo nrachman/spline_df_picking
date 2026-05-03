@@ -1,0 +1,10 @@
+library(variancePartition)
+vp <- readRDS("../../data/analysis_out/variancePartition/varPart_include_cbc_fardeep_lm22_summed.rds")
+vp <- data.frame(vp)
+cell_cols <- startsWith(colnames(vp), "cellfreq")
+vp_sub <- vp[, !cell_cols]
+vp_sub$CellFreqs <- rowSums(vp[, cell_cols])
+p <- plotVarPart(vp_sub)
+print("Plot data medians:")
+agg <- aggregate(value ~ variable, p$data, median)
+print(agg[order(-agg$value),])
