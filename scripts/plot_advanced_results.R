@@ -35,7 +35,7 @@ if ("age_random_binned" %in% names(results)) {
   res <- results[["age_random_binned"]]
   vp <- as.data.frame(res$vp_realized) %>%
     rownames_to_column("gene") %>%
-    select(gene, Subject.ID, Age = Age_Binned) %>%
+    select(gene, Subject.ID, Age) %>%
     pivot_longer(-gene, names_to = "Component", values_to = "Variance")
   
   p2 <- ggplot(vp, aes(x = Component, y = Variance, fill = Component)) +

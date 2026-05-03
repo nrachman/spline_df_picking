@@ -1,0 +1,84 @@
+---
+title: "Longitudinal Age Modeling & Variance Partitioning Benchmark"
+subtitle: "Evaluating Spline Complexity and Empirical Variance Estimates"
+author: "Gemini CLI"
+date: "2026-05-02"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    embed-resources: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Executive Summary
+
+This report summarizes two major benchmarking efforts aimed at refining the longitudinal modeling of age trajectories (ages 0–14) in immune profiles. We evaluated spline architectures, optimal degrees of freedom, and advanced variance partitioning methods to ensure robust separation of individual identity (*Subject*) from developmental trends (*Age*).
+
+---
+
+## Analysis 1: Spline Architecture & Complexity (AIC Tournament)
+
+The first phase compared Natural Cubic Splines (`ns`) and Piecewise Linear Splines (`lspline`) across a range of complexities (1–10 degrees of freedom).
+
+### Key Findings
+1.  **Optimal Complexity:** The "AIC Tournament" revealed that for the majority of genes, simpler models ($df=1$) are statistically preferred. However, to capture non-linear developmental transitions present in a subset of critical genes, a baseline of **$df=3$ or $df=4$** was identified as a balanced trade-off.
+2.  **Subject Stability:** Subject variance estimates remained remarkably stable across different spline types and complexities, suggesting that "variance stealing" by overly complex age models is minimal in this dataset.
+3.  **Inference Power:** Power to detect significant age effects (FDR < 0.05) peaks early and plateaus, confirming that excessive complexity does not necessarily yield more biological insight.
+
+<div style="display: flex; justify-content: space-around;">
+  <div style="width: 45%;">
+    <img src="../output/images/aic_tournament.png" alt="AIC Tournament" style="width: 100%;">
+    <p style="text-align: center; font-size: 0.8em;">AIC Tournament: Lower df is generally preferred.</p>
+  </div>
+  <div style="width: 45%;">
+    <img src="../output/images/subject_variance_stability.png" alt="Subject Variance Stability" style="width: 100%;">
+    <p style="text-align: center; font-size: 0.8em;">Subject Variance Stability: Individuality is dominant.</p>
+  </div>
+</div>
+
+---
+
+## Analysis 2: Advanced Variance Partitioning & Binned Age
+
+The second phase addressed the scale of *Subject* vs. *Age* effects and implemented a more conservative empirical approach to variance estimation.
+
+### "Realized Predictions" vs. Standard VP
+Standard variance partitioning relies on theoretical population parameters ($\sigma^2$). We implemented the **"Realized Predictions"** approach, which calculates the empirical variance of the Best Linear Unbiased Predictors (BLUPs). 
+
+*   **Conclusion:** The Realized approach provides a more conservative and biologically grounded estimate of the variance explained by Subject identity, preventing overestimation in cases of near-singular fits.
+
+<div style="text-align: center;">
+  <img src="../output/images/vp_method_comparison.png" alt="VP Method Comparison" style="width: 70%;">
+  <p style="font-size: 0.8em;">Realized predictions offer a more conservative empirical scale.</p>
+</div>
+
+### Binned Age as a Random Effect
+To test the "extreme" limit of age modeling, we treated Age as a categorical random effect by binning samples into groups of 6.
+
+*   **Finding:** Even when Age is allowed to take on a highly flexible categorical form (`Age_Binned`), the variance explained by **Subject.ID** remains significantly higher than the variance explained by **Age**. This reinforces the conclusion that individuality is the primary driver of transcriptional variation in this cohort.
+
+<div style="text-align: center;">
+  <img src="../output/images/subject_vs_binned_age_variance.png" alt="Subject vs Binned Age" style="width: 70%;">
+  <p style="font-size: 0.8em;">Subject identity dominates even against granular binned Age.</p>
+</div>
+
+---
+
+## Technical Implementation Notes
+
+### Optimization Strategy
+To ensure convergence and comparability across thousands of models, we enforced the following standards:
+*   **Optimizer:** `bobyqa` was used for all `lmer` fits via `lmerControl(optimizer = "bobyqa")`. This proved more robust than the default `nloptwrap` for complex spline terms.
+*   **Scaling:** All continuous covariates (RIN, Cell Percentages, etc.) were mean-centered and scaled to unit variance to improve numerical stability.
+*   **Singular Fits:** Convergence warnings and singular fits were monitored; the "Realized Predictions" method specifically helps mitigate the impact of singular random effect estimates on variance partitioning.
+
+### Covariate Management
+The final recommended model architecture includes:
+`~ (1|Subject.ID) + ns(Age.months, df=4) + (1|Batch) + [Cell Percentages] + [Technical Factors]`
+
+This structure balances the need to capture non-linear developmental trends while rigorously accounting for the high degree of inter-individual variability characteristic of this longitudinal cohort.
