@@ -72,6 +72,24 @@ To provide a "ceiling" for how much variance Age could possibly explain, we trea
 
 ---
 
+## High-Resolution Gene Trajectories
+
+To visualize how different models capture developmental transitions, we plotted the age-trajectories for 5 representative genes. The raw expression values are adjusted for sex, technical factors (RIN, Batch), and cell type proportions to isolate the pure Age signal.
+
+::: {layout-ncol=2}
+![**MID2:** Shows a gradual, relatively linear developmental trend where all three models perform similarly.](../output/images/gene_examples/age_trend_MID2.png)
+
+![**CD177:** Displays a more complex, non-linear pattern in early life. Natural splines (`ns_df4`) provide a smooth fit through the density of points.](../output/images/gene_examples/age_trend_CD177.png)
+
+![**NAP1L2:** Illustrates how the categorical model (green) can be "jerky" at year boundaries, while splines provide more biologically plausible continuity.](../output/images/gene_examples/age_trend_NAP1L2.png)
+
+![**SFRP5:** A gene with significant early-life dynamics. The natural spline captures the rapid transition more smoothly than the piecewise linear model.](../output/images/gene_examples/age_trend_SFRP5.png)
+:::
+
+![**HTRA1:** Demonstrates a clear downward trajectory with age. Note how the spline and linear models overlap heavily, while the categorical model highlights the year-to-year shifts.](../output/images/gene_examples/age_trend_HTRA1.png){width=75%}
+
+---
+
 ## Global Context
 
 ### Global Variance Partitioning
