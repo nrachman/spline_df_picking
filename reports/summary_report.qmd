@@ -122,6 +122,20 @@ Beyond visual smoothness, the choice between Natural Splines (`ns`) and Piecewis
 
 ---
 
+## Analysis 3: Cell Frequency Resolution Benchmark
+
+We evaluated the impact of using higher-resolution cell type frequencies on our ability to explain transcriptional variation. We compared a model using 5 basic CBC cell types (Lymphocytes, Monocytes, etc.) against a model using 22 high-resolution immune cell types from FarDeep LM22 deconvolution.
+
+::: {layout-ncol=2}
+![**Variance Explained by Cell Frequency:** Moving from 5 basic CBC types to 22 high-resolution deconvolution types nearly triples the median variance explained by the "CellFreq" component (from ~2.4% to ~7.1%). This indicates that much of what is typically considered "biological noise" is actually fine-grained variation in immune cell composition.](../output/images/deconvolution_vs_cbc_cellfreq.png)
+
+![**Reduction in Residuals:** The additional variance captured by deconvolution comes primarily from the "Residual" bucket. By explicitly modeling higher-resolution cell types, we reduce the unexplained noise in the dataset, leading to more robust estimates of Age and Subject effects.](../output/images/deconvolution_vs_cbc_residuals.png)
+:::
+
+![**Global Component Comparison:** This boxplot shows the shift in all variance components when moving to high-resolution deconvolution. While Subject ID remains the dominant driver, the increased resolution of deconvolution provides a much clearer picture of the compositional landscape.](../output/images/deconvolution_vs_cbc_all.png){width=80%}
+
+---
+
 ## Global Context
 
 ### Global Variance Partitioning

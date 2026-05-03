@@ -2,3 +2,8 @@
 *.pdf
 *.png
 *.html
+reports/summary_report.html
+
+output/*
+*.rds
+*.log
