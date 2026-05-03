@@ -30,16 +30,11 @@ The first phase compared Natural Cubic Splines (`ns`) and Piecewise Linear Splin
 2.  **Subject Stability:** Subject variance estimates remained remarkably stable across different spline types and complexities, suggesting that "variance stealing" by overly complex age models is minimal in this dataset.
 3.  **Inference Power:** Power to detect significant age effects (FDR < 0.05) peaks early and plateaus, confirming that excessive complexity does not necessarily yield more biological insight.
 
-<div style="display: flex; justify-content: space-around;">
-  <div style="width: 45%;">
-    <img src="../output/images/aic_tournament.png" alt="AIC Tournament" style="width: 100%;">
-    <p style="text-align: center; font-size: 0.8em;">AIC Tournament: Lower df is generally preferred.</p>
-  </div>
-  <div style="width: 45%;">
-    <img src="../output/images/subject_variance_stability.png" alt="Subject Variance Stability" style="width: 100%;">
-    <p style="text-align: center; font-size: 0.8em;">Subject Variance Stability: Individuality is dominant.</p>
-  </div>
-</div>
+::: {layout-ncol=2}
+![AIC Tournament: Lower df is generally preferred.](../output/images/aic_tournament.png)
+
+![Subject Variance Stability: Individuality is dominant.](../output/images/subject_variance_stability.png)
+:::
 
 ---
 
@@ -52,20 +47,14 @@ Standard variance partitioning relies on theoretical population parameters ($\si
 
 *   **Conclusion:** The Realized approach provides a more conservative and biologically grounded estimate of the variance explained by Subject identity, preventing overestimation in cases of near-singular fits.
 
-<div style="text-align: center;">
-  <img src="../output/images/vp_method_comparison.png" alt="VP Method Comparison" style="width: 70%;">
-  <p style="font-size: 0.8em;">Realized predictions offer a more conservative empirical scale.</p>
-</div>
+![Realized predictions offer a more conservative empirical scale.](../output/images/vp_method_comparison.png){width=75%}
 
 ### Binned Age as a Random Effect
 To test the "extreme" limit of age modeling, we treated Age as a categorical random effect by binning samples into groups of 6.
 
 *   **Finding:** Even when Age is allowed to take on a highly flexible categorical form (`Age_Binned`), the variance explained by **Subject.ID** remains significantly higher than the variance explained by **Age**. This reinforces the conclusion that individuality is the primary driver of transcriptional variation in this cohort.
 
-<div style="text-align: center;">
-  <img src="../output/images/subject_vs_binned_age_variance.png" alt="Subject vs Binned Age" style="width: 70%;">
-  <p style="font-size: 0.8em;">Subject identity dominates even against granular binned Age.</p>
-</div>
+![Subject identity dominates even against granular binned Age.](../output/images/subject_vs_binned_age_variance.png){width=75%}
 
 ---
 
