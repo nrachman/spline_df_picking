@@ -143,6 +143,32 @@ We evaluated the impact of using higher-resolution cell type frequencies on our 
 
 ---
 
+## Analysis 4: Transcriptome-wide vs. HVG Bias
+
+A critical finding of this benchmark is the dramatic shift in variance partitioning results depending on gene selection. While the Top 1000 Highly Variable Genes (HVGs) are ideal for identifying robust individual fingerprints, they significantly mask the signal of cellular composition.
+
+### Spline Stability in Random Genes
+We repeated the "Modeling Tournament" using 500 randomly selected genes to ensure our conclusions about Subject stability were not biased by the high-variance nature of HVGs.
+
+::: {layout-ncol=2}
+![**Random Genes: Subject Stability:** Even across the broader transcriptome, Subject variance remains remarkably stable as age model complexity increases. This proves that individuality is a fundamental property of nearly all genes, not just the most variable ones.](../output/images/random_genes/subject_variance_stability.png)
+
+![**Random Genes: Inference Power:** The "knee" at $df=4$ is even more pronounced in random genes, further justifying our choice of $df=4$ as the standard for age modeling.](../output/images/random_genes/age_inference_power.png)
+:::
+
+### Cell Frequency Sensitivity (Random Genes)
+When analyzing random genes, the impact of using high-resolution cell type frequencies (Deconvolution) is even more stark than in HVGs.
+
+::: {layout-ncol=2}
+![**Random Genes: Cell Frequency Variance:** In the broader transcriptome, cell frequency can explain upwards of 20-30% of the variance for many genes. Moving to Deconvolution captures significantly more of this signal than basic CBC.](../output/images/random_genes/deconvolution_vs_cbc_cellfreq.png)
+
+![**Random Genes: Residual Reduction:** The improvement in model fit (reduction in residuals) is more substantial in random genes, indicating that deconvolution is essential for high-sensitivity transcriptome-wide analyses.](../output/images/random_genes/deconvolution_vs_cbc_residuals.png)
+:::
+
+![**Random Genes: Global Component Shift:** This view confirms that while Subject ID is slightly less dominant in random genes compared to HVGs (median ~10% vs ~54%), the Cell Frequency component becomes a primary driver (~21% median).](../output/images/random_genes/deconvolution_vs_cbc_all.png){width=80%}
+
+---
+
 ## Methodological Observations
 
 ### Impact of Gene Selection on Variance Partitioning
@@ -167,7 +193,7 @@ The conclusions in this report are supported by a suite of benchmarking and audi
 
 ### 1. Spline & Age Modeling
 - **Analysis:** AIC Tournament, Subject Stability, and Inference Power ($df=1..10$).
-- **Script:** `scripts/run_spline_benchmark.R`
+- **Script:** `scripts/run_spline_benchmark.R` (HVGs) and `scripts/run_spline_benchmark_random.R` (Random Genes).
 - **Method:** `lmer` with `bobyqa` optimizer; `ns` and `lspline` basis expansion.
 
 ### 2. Advanced Variance & Binned Age
@@ -177,8 +203,8 @@ The conclusions in this report are supported by a suite of benchmarking and audi
 
 ### 3. Cell Frequency Resolution
 - **Analysis:** CBC (5-type) vs. FarDeep LM22 (22-type) deconvolution resolution.
-- **Script:** `scripts/run_deconvolution_benchmark.R`
-- **Method:** Comparative variance partitioning on 1000 HVGs.
+- **Script:** `scripts/run_deconvolution_benchmark.R` (HVGs) and `scripts/run_deconvolution_benchmark_random.R` (Random Genes).
+- **Method:** Comparative variance partitioning on 1000 genes.
 
 ### 4. Variance Discrepancy Audit
 - **Analysis:** HVG bias vs. Random Gene variance partitioning.
